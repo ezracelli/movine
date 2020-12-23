@@ -16,9 +16,12 @@ use std::io::Read;
 #[cfg(feature = "with-rustls")]
 use tokio_postgres_rustls::MakeRustlsConnect;
 
+mod mysql_params;
 mod postgres_params;
 mod sqlite_params;
 
+pub use self::mysql_params::MysqlParams;
+use self::mysql_params::RawMysqlParams;
 pub use self::postgres_params::PostgresParams;
 use self::postgres_params::RawPostgresParams;
 use sqlite_params::RawSqliteParams;
@@ -26,6 +29,7 @@ pub use sqlite_params::SqliteParams;
 
 #[derive(Debug)]
 pub struct Config {
+    pub mysql: Option<MysqlParams>,
     pub postgres: Option<PostgresParams>,
     pub sqlite: Option<SqliteParams>,
     pub database_url: Option<String>,
@@ -34,6 +38,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            mysql: None,
             postgres: None,
             sqlite: None,
             database_url: None,
@@ -44,6 +49,7 @@ impl Default for Config {
 impl Config {
     pub fn load(file: &str) -> Result<Self> {
         let raw_config = RawConfig::load_file(file);
+        let mysql_env_params = RawMysqlParams::load_from_env();
         let pg_env_params = RawPostgresParams::load_from_env();
         let sqlite_env_params = RawSqliteParams::load_from_env();
         let database_url = std::env::var("DATABASE_URL");
@@ -78,6 +84,19 @@ impl Config {
 
         match raw_config {
             Some(RawConfig {
+                mysql: Some(mysql_params),
+                ..
+            }) => {
+                debug!("Using mysql config-file params provided.");
+                let all_params = [Ok(mysql_params), mysql_env_params];
+                let params: Vec<_> = all_params.iter().filter_map(|x| x.as_ref().ok()).collect();
+                let params: MysqlParams = (&params[..]).try_into()?;
+                Ok(Self {
+                    mysql: Some(params),
+                    ..Self::default()
+                })
+            }
+            Some(RawConfig {
                 postgres: Some(pg_params),
                 ..
             }) => {
@@ -103,8 +122,17 @@ impl Config {
                     ..Self::default()
                 })
             }
-            _ => match (pg_env_params, sqlite_env_params) {
-                (Ok(pg_env_params), _) if pg_env_params.is_any() => {
+            _ => match (mysql_env_params, pg_env_params, sqlite_env_params) {
+                (Ok(mysql_env_params), _, _) if mysql_env_params.is_any() => {
+                    debug!("Using mysql env vars provided.");
+                    let params = [&mysql_env_params];
+                    let params = (&params[..]).try_into()?;
+                    Ok(Self {
+                        mysql: Some(params),
+                        ..Self::default()
+                    })
+                }
+                (_, Ok(pg_env_params), _) if pg_env_params.is_any() => {
                     debug!("Using postgres env vars provided.");
                     let params = [&pg_env_params];
                     let params = (&params[..]).try_into()?;
@@ -113,7 +141,7 @@ impl Config {
                         ..Self::default()
                     })
                 }
-                (_, Ok(sqlite_env_params)) if sqlite_env_params.is_any() => {
+                (_, _, Ok(sqlite_env_params)) if sqlite_env_params.is_any() => {
                     debug!("Using sqlite env vars provided.");
                     let params = [&sqlite_env_params];
                     let params = (&params[..]).try_into()?;
@@ -124,6 +152,56 @@ impl Config {
                 }
                 _ => Err(Error::ConfigNotFound),
             },
+        }
+    }
+
+    pub fn into_mysql_conn_from_url(self) -> Result<mysql::Conn> {
+        if let Some(ref url) = self.database_url {
+            if url.starts_with("mysql") {
+                let conn = mysql::Conn::new(&url)?;
+                Ok(conn)
+            } else {
+                Err(Error::AdaptorNotFound)
+            }
+        } else {
+            Err(Error::AdaptorNotFound)
+        }
+    }
+
+    pub fn into_mysql_conn_from_config(self) -> Result<mysql::Conn> {
+        if let Some(ref params) = self.mysql {
+            let url = match params.password {
+                Some(ref password) => format!(
+                    "mysql://{user}:{password}@{host}:{port}/{database}",
+                    user = params.user,
+                    password = password,
+                    host = params.host,
+                    port = params.port,
+                    database = params.database,
+                ),
+                None => format!(
+                    "mysql://{user}@{host}:{port}/{database}",
+                    user = params.user,
+                    host = params.host,
+                    port = params.port,
+                    database = params.database,
+                ),
+            };
+            let conn = if let Some(cert) = &params.sslcert {
+                mysql::Conn::new::<mysql::Opts>({
+                    mysql::OptsBuilder::from_opts(
+                        mysql::Opts::from_url(&url).map_err(|err| mysql::Error::UrlError(err))?,
+                    )
+                    .ssl_opts(mysql::SslOpts::default().with_root_cert_path(Some(cert.clone())))
+                    .into()
+                })?
+            } else {
+                mysql::Conn::new(&url)?
+            };
+
+            Ok(conn)
+        } else {
+            Err(Error::AdaptorNotFound)
         }
     }
 
@@ -183,9 +261,18 @@ impl Config {
     pub fn into_db_adaptor(self) -> Result<Box<dyn DbAdaptor>> {
         match self {
             Config {
-                database_url: Some(_),
+                database_url: Some(ref database_url),
                 ..
-            } => Ok(Box::new(self.into_pg_conn_from_url()?)),
+            } => {
+                if database_url.starts_with("postgresql") {
+                    Ok(Box::new(self.into_pg_conn_from_url()?))
+                } else if database_url.starts_with("mysql") {
+                    Ok(Box::new(self.into_mysql_conn_from_url()?))
+                } else {
+                    Err(Error::AdaptorNotFound)
+                }
+            }
+            Config { mysql: Some(_), .. } => Ok(Box::new(self.into_mysql_conn_from_config()?)),
             Config {
                 postgres: Some(_), ..
             } => Ok(Box::new(self.into_pg_conn_from_config()?)),
@@ -199,6 +286,7 @@ impl Config {
 
 #[derive(Debug, Deserialize)]
 pub struct RawConfig {
+    pub mysql: Option<RawMysqlParams>,
     pub postgres: Option<RawPostgresParams>,
     pub sqlite: Option<RawSqliteParams>,
 }

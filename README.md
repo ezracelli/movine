@@ -34,6 +34,14 @@ The first step to get started with Movine is to set the configuration. Configura
 If Movine finds a config file named `movine.toml` it will use the parameters specified.
 
 ```toml
+[mysql]
+host = {host}
+database = {db}
+user = {username}
+password = {pass}
+port = {port}
+sslcert = {cert filename}
+
 [postgres]
 host = {host}
 database = {db}
@@ -54,6 +62,8 @@ database_url={url_string}
 *Note: You should only specify connection details for one database type, or Movine will implicitly choose one*
 
 ### Environment variables
+
+You can configure the MySQL adaptor using the environment variables described in the [MySQL docker documentation](https://hub.docker.com/_/mysql/). Specifically `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` <!--and `PGSSLCERT`--> are supported.
 
 You can configure the PostgreSQL adaptor using the environment variables described in the [PostgreSQL documentation](https://www.postgresql.org/docs/current/libpq-envars.html). Specifically `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` and `PGSSLCERT` are supported.
 
