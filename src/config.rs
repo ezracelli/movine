@@ -173,18 +173,18 @@ impl Config {
             let url = match params.password {
                 Some(ref password) => format!(
                     "mysql://{user}:{password}@{host}:{port}/{database}",
-                    user = params.user,
-                    password = password,
-                    host = params.host,
+                    user = urlencoding::encode(&params.user),
+                    password = urlencoding::encode(&password),
+                    host = urlencoding::encode(&params.host),
                     port = params.port,
-                    database = params.database,
+                    database = urlencoding::encode(&params.database),
                 ),
                 None => format!(
                     "mysql://{user}@{host}:{port}/{database}",
-                    user = params.user,
-                    host = params.host,
+                    user = urlencoding::encode(&params.user),
+                    host = urlencoding::encode(&params.host),
                     port = params.port,
-                    database = params.database,
+                    database = urlencoding::encode(&params.database),
                 ),
             };
             let conn = if let Some(cert) = &params.sslcert {
@@ -223,18 +223,18 @@ impl Config {
             let url = match params.password {
                 Some(ref password) => format!(
                     "postgresql://{user}:{password}@{host}:{port}/{database}",
-                    user = params.user,
-                    password = password,
-                    host = params.host,
+                    user = urlencoding::encode(&params.user),
+                    password = urlencoding::encode(&password),
+                    host = urlencoding::encode(&params.host),
                     port = params.port,
-                    database = params.database,
+                    database = urlencoding::encode(&params.database),
                 ),
                 None => format!(
                     "postgresql://{user}@{host}:{port}/{database}",
-                    user = params.user,
-                    host = params.host,
+                    user = urlencoding::encode(&params.user),
+                    host = urlencoding::encode(&params.host),
                     port = params.port,
-                    database = params.database,
+                    database = urlencoding::encode(&params.database),
                 ),
             };
             let conn = if let Some(cert) = &params.sslcert {

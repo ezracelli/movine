@@ -28,6 +28,7 @@ postgres-native-tls = { version = "0.5.0", optional = true }
 native-tls = { version = "0.2.7", optional = true }
 libsqlite3-sys = { version = "0.18.0", features = ["bundled"] }
 ansi_term = "0.12.1"
+urlencoding = "1.1.1"
 rustls = { version = "0.19.0", optional = true }
 tokio-postgres-rustls = { version = "0.8.0", optional = true }
 
