@@ -75,7 +75,7 @@ VALUES (?, ?, ?);
 
 pub const LOG_DOWN_MIGRATION: &str = "\
 DELETE FROM movine_migrations
-WHERE name = $1;
+WHERE name = ?;
 ";
 
 pub const INIT_UP_SQL: &str = "\
