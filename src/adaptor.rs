@@ -3,6 +3,7 @@ use crate::errors::Result;
 use crate::migration::Migration;
 use crate::plan_builder::Step;
 
+mod mysql;
 mod postgres;
 mod sqlite;
 

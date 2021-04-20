@@ -1,5 +1,6 @@
 use libsqlite3_sys::Error as SqliteLibError;
 use libsqlite3_sys::ErrorCode as SqliteLibErrorCode;
+use mysql::Error as MysqlError;
 use postgres::error::Error as PostgresError;
 use rusqlite::Error as SqliteError;
 use std::fmt;
@@ -11,6 +12,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 //#[derive(Debug)]
 pub enum Error {
     ConfigNotFound,
+    MysqlParamError {
+        user: bool,
+        password: bool,
+        database: bool,
+        host: bool,
+        port: bool,
+    },
     PgParamError {
         user: bool,
         password: bool,
@@ -30,6 +38,7 @@ pub enum Error {
     UnrollbackableMigration,
     IoError(io::Error),
     TomlError(TomlError),
+    MysqlError(MysqlError),
     PgError(PostgresError),
     SqliteError(SqliteError),
     Envy(envy::Error),
@@ -55,6 +64,7 @@ impl fmt::Debug for Error {
             UnrollbackableMigration => write!(f, "Can't rollback one of the migrations in the list. Consider chaning your parameters or adding a `down.sql` migration."),
             IoError(e) => write!(f, "IO Error: {}", e),
             TomlError(e) => write!(f, "Unable to read config file: {}", e),
+            MysqlError(e) => write!(f, "Error in MySQL: {}", e),
             PgError(e) => write!(f, "Error in Postgres: {}", e),
             SqliteError(e) => {
                 match e {
@@ -79,6 +89,12 @@ impl fmt::Debug for Error {
                 write!(f, "Unable to load Postgres params. Please ensure you have the following defined:\nUser: {}\nPassword: {}\nDatabase: {}\nHost: {}\nPort: {}",
                     user, password, database, host, port)
             }
+            MysqlParamError {
+                user, password, database, host, port
+            } => {
+                write!(f, "Unable to load MySQL params. Please ensure you have the following defined:\nUser: {}\nPassword: {}\nDatabase: {}\nHost: {}\nPort: {}",
+                    user, password, database, host, port)
+            }
         }
     }
 }
@@ -92,6 +108,12 @@ impl From<io::Error> for Error {
 impl From<TomlError> for Error {
     fn from(error: TomlError) -> Self {
         Error::TomlError(error)
+    }
+}
+
+impl From<MysqlError> for Error {
+    fn from(error: MysqlError) -> Self {
+        Error::MysqlError(error)
     }
 }
 
